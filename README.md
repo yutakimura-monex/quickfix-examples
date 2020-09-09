@@ -1,6 +1,6 @@
 # Example QuickFIX/Go Applications
 
-Financial Information Exchange protocol (FIX Protocol) の学習に、QuickFIX サンプルを使用します。
+Financial Information Exchange protocol (FIX Protocol) の学習に、[QuickFIX](http://quickfixengine.org/) サンプルを使用します。
 
 [FIX Protcol](https://www.onixs.biz/fix-protocol.html) は、株の売買等に使う[世界共通の通信プロトコル](https://faqsd.jpx.co.jp/faq/show/39?back=front%2Fcategory%3Ashow&category_id=23&page=1&site_domain=default&sort=sort_access&sort_order=desc)です。
 
