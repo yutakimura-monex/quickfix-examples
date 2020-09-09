@@ -84,36 +84,7 @@ func QueryAction() (string, error) {
 }
 
 func queryVersion() (string, error) {
-	fmt.Println()
-	fmt.Println("1) FIX.4.0")
-	fmt.Println("2) FIX.4.1")
-	fmt.Println("3) FIX.4.2")
-	fmt.Println("4) FIX.4.3")
-	fmt.Println("5) FIX.4.4")
-	fmt.Println("6) FIXT.1.1 (FIX.5.0)")
-	fmt.Print("BeginString: ")
-
-	scanner := bufio.NewScanner(os.Stdin)
-	if !scanner.Scan() {
-		return "", scanner.Err()
-	}
-
-	switch scanner.Text() {
-	case "1":
-		return quickfix.BeginStringFIX40, nil
-	case "2":
-		return quickfix.BeginStringFIX41, nil
-	case "3":
-		return quickfix.BeginStringFIX42, nil
-	case "4":
-		return quickfix.BeginStringFIX43, nil
-	case "5":
-		return quickfix.BeginStringFIX44, nil
-	case "6":
-		return quickfix.BeginStringFIXT11, nil
-	}
-
-	return "", fmt.Errorf("unknown BeginString choice: %v", scanner.Text())
+	return quickfix.BeginStringFIX42, nil
 }
 
 func queryClOrdID() field.ClOrdIDField {
@@ -198,6 +169,11 @@ func queryPrice() field.PriceField {
 	return field.NewPrice(queryDecimal("Price"), 2)
 }
 
+func queryPriceMarket() field.PriceField {
+	val, _ := decimal.NewFromString("0")
+	return field.NewPrice(val, 2)
+}
+
 func queryStopPx() field.StopPxField {
 	return field.NewStopPx(queryDecimal("Stop Price"), 2)
 }
@@ -236,6 +212,13 @@ func queryHeader(h header) {
 	}
 
 	h.Set(queryTargetSubID())
+}
+
+func queryHeader42(h header, settings *quickfix.Settings) {
+	senderCompId, _ := settings.GlobalSettings().Setting("SenderCompID")
+	targetCompID, _ := settings.GlobalSettings().Setting("TargetCompID")
+	h.Set(field.NewSenderCompID(senderCompId))
+	h.Set(field.NewTargetCompID(targetCompID))
 }
 
 func queryNewOrderSingle40() fix40nos.NewOrderSingle {
@@ -280,7 +263,7 @@ func queryNewOrderSingle41() (msg *quickfix.Message) {
 	return
 }
 
-func queryNewOrderSingle42() (msg *quickfix.Message) {
+func queryNewOrderSingle42(settings *quickfix.Settings) (msg *quickfix.Message) {
 	var ordType field.OrdTypeField
 	order := fix42nos.New(queryClOrdID(), field.NewHandlInst("1"), querySymbol(), querySide(), field.NewTransactTime(time.Now()), queryOrdType(&ordType))
 	order.Set(queryOrderQty())
@@ -288,6 +271,8 @@ func queryNewOrderSingle42() (msg *quickfix.Message) {
 	switch ordType.Value() {
 	case enum.OrdType_LIMIT, enum.OrdType_STOP_LIMIT:
 		order.Set(queryPrice())
+	case enum.OrdType_MARKET:
+		order.Set(queryPriceMarket())
 	}
 
 	switch ordType.Value() {
@@ -297,7 +282,7 @@ func queryNewOrderSingle42() (msg *quickfix.Message) {
 
 	order.Set(queryTimeInForce())
 	msg = order.ToMessage()
-	queryHeader(&msg.Header)
+	queryHeader42(&msg.Header, settings)
 	return
 }
 
@@ -387,11 +372,11 @@ func queryOrderCancelRequest41() (msg *quickfix.Message) {
 	return
 }
 
-func queryOrderCancelRequest42() (msg *quickfix.Message) {
+func queryOrderCancelRequest42(settings *quickfix.Settings) (msg *quickfix.Message) {
 	cancel := fix42cxl.New(queryOrigClOrdID(), queryClOrdID(), querySymbol(), querySide(), field.NewTransactTime(time.Now()))
 	cancel.Set(queryOrderQty())
 	msg = cancel.ToMessage()
-	queryHeader(&msg.Header)
+	queryHeader42(&msg.Header, settings)
 	return
 }
 
@@ -423,7 +408,7 @@ func queryOrderCancelRequest50() (msg *quickfix.Message) {
 	return
 }
 
-func queryMarketDataRequest42() fix42mdr.MarketDataRequest {
+func queryMarketDataRequest42(settings *quickfix.Settings) fix42mdr.MarketDataRequest {
 	request := fix42mdr.New(field.NewMDReqID("MARKETDATAID"),
 		field.NewSubscriptionRequestType(enum.SubscriptionRequestType_SNAPSHOT),
 		field.NewMarketDepth(0),
@@ -437,7 +422,7 @@ func queryMarketDataRequest42() fix42mdr.MarketDataRequest {
 	relatedSym.Add().SetSymbol("LNUX")
 	request.SetNoRelatedSym(relatedSym)
 
-	queryHeader(request.Header)
+	queryHeader42(request.Header, settings)
 	return request
 }
 
@@ -495,7 +480,7 @@ func queryMarketDataRequest50() fix50mdr.MarketDataRequest {
 	return request
 }
 
-func QueryEnterOrder() (err error) {
+func QueryEnterOrder(settings *quickfix.Settings) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -517,7 +502,7 @@ func QueryEnterOrder() (err error) {
 		order = queryNewOrderSingle41()
 
 	case quickfix.BeginStringFIX42:
-		order = queryNewOrderSingle42()
+		order = queryNewOrderSingle42(settings)
 
 	case quickfix.BeginStringFIX43:
 		order = queryNewOrderSingle43()
@@ -532,7 +517,7 @@ func QueryEnterOrder() (err error) {
 	return quickfix.Send(order)
 }
 
-func QueryCancelOrder() (err error) {
+func QueryCancelOrder(settings *quickfix.Settings) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -554,7 +539,7 @@ func QueryCancelOrder() (err error) {
 		cxl = queryOrderCancelRequest41()
 
 	case quickfix.BeginStringFIX42:
-		cxl = queryOrderCancelRequest42()
+		cxl = queryOrderCancelRequest42(settings)
 
 	case quickfix.BeginStringFIX43:
 		cxl = queryOrderCancelRequest43()
@@ -573,7 +558,7 @@ func QueryCancelOrder() (err error) {
 	return
 }
 
-func QueryMarketDataRequest() error {
+func QueryMarketDataRequest(settings *quickfix.Settings) error {
 	beginString, err := queryVersion()
 	if err != nil {
 		return err
@@ -582,7 +567,7 @@ func QueryMarketDataRequest() error {
 	var req quickfix.Messagable
 	switch beginString {
 	case quickfix.BeginStringFIX42:
-		req = queryMarketDataRequest42()
+		req = queryMarketDataRequest42(settings)
 
 	case quickfix.BeginStringFIX43:
 		req = queryMarketDataRequest43()

@@ -1,0 +1,8 @@
+FROM golang:1.14
+
+WORKDIR /go/src/app
+COPY . .
+
+RUN go build -v -o ./bin/tradeclient ./cmd/tradeclient
+
+CMD [ "./bin/tradeclient", "config/tradeclient_docker.cfg" ]

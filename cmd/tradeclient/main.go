@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/quickfixgo/examples/cmd/tradeclient/internal"
 	"github.com/quickfixgo/quickfix"
@@ -47,9 +48,33 @@ func (e TradeClient) ToApp(msg *quickfix.Message, sessionID quickfix.SessionID) 
 
 //FromApp implemented as part of Application interface. This is the callback for all Application level messages from the counter party.
 func (e TradeClient) FromApp(msg *quickfix.Message, sessionID quickfix.SessionID) (reject quickfix.MessageRejectError) {
+	fmt.Printf("\n")
 	fmt.Printf("FromApp: %s\n", msg.String())
+	fmt.Printf("as\n")
+
+	msgType, _ := msg.MsgType()
+	fmt.Printf("  MsgType: %s \n", msgType)
+
+	tags := msg.Body.Tags()
+	sort.Sort(ByTag(tags))
+	for _, tag := range tags {
+		if val, err := msg.Body.GetString(tag); err == nil {
+			fmt.Printf("  %3d: %s\n", tag, val)
+		} else if val, err := msg.Body.GetInt(tag); err == nil {
+			fmt.Printf("  %3d: %d\n", tag, val)
+		} else if val, err := msg.Body.GetTime(tag); err == nil {
+			fmt.Printf("  %3d: %s\n", tag, val.String())
+		}
+	}
 	return
 }
+
+// orde by Tag
+type ByTag []quickfix.Tag
+
+func (t ByTag) Len() int           { return len(t) }
+func (t ByTag) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
+func (t ByTag) Less(i, j int) bool { return t[i] < t[j] }
 
 func main() {
 	flag.Parse()
@@ -96,13 +121,13 @@ Loop:
 
 		switch action {
 		case "1":
-			err = internal.QueryEnterOrder()
+			err = internal.QueryEnterOrder(appSettings)
 
 		case "2":
-			err = internal.QueryCancelOrder()
+			err = internal.QueryCancelOrder(appSettings)
 
 		case "3":
-			err = internal.QueryMarketDataRequest()
+			err = internal.QueryMarketDataRequest(appSettings)
 
 		case "4":
 			//quit
